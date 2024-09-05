@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Horas por Código</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        #loading {
+            display: none;
+            font-size: 1.2em;
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+    <h1>Consulta de Horas</h1>
+    <label for="codigo">Digite o código da criança:</label>
+    <input type="text" id="codigo" />
+    <button onclick="buscarDados()">Buscar Dados</button>
+
+    <p id="loading">Carregando dados, por favor aguarde...</p>
+
+    <div id="resultado"></div>
+
+    <script>
+        function buscarDados() {
+            const codigoEntrada = document.getElementById('codigo').value.trim();
+            const resultado = document.getElementById('resultado');
+            const loading = document.getElementById('loading');
+
+            if (codigoEntrada === "") {
+                resultado.innerHTML = "Por favor, insira o código da criança.";
+                return;
+            }
+
+            loading.style.display = "block"; // Mostrar mensagem de carregando
+            resultado.innerHTML = ""; // Limpar resultado anterior
+
+            const url = 'https://docs.google.com/spreadsheets/d/1Vc5CjpXFhn_uiO_40TL275MnYlB1UO7K/export?format=csv';
+            
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Não foi possível acessar o arquivo.");
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    const linhas = data.split('\n').map(linha => linha.split(','));
+                    buscarDadosPorCodigo(linhas, codigoEntrada);
+                    loading.style.display = "none"; // Esconder mensagem de carregando
+                })
+                .catch(error => {
+                    resultado.innerHTML = "Erro ao carregar os dados: " + error.message;
+                    loading.style.display = "none"; // Esconder mensagem de carregando
+                });
+        }
+
+        function buscarDadosPorCodigo(data, codigo) {
+            const resultado = document.getElementById('resultado');
+            let dadosEncontrados = null;
+
+            // Procura pela linha que contém o código da criança
+            data.forEach(row => {
+                if (row[0] == codigo) { // O código está na primeira coluna (índice 0)
+                    dadosEncontrados = row;
+                }
+            });
+
+            if (dadosEncontrados) {
+                // Estrutura da tabela de dados
+                let html = `
+                    <h2>Ficha de Tempo</h2>
+                    <p><strong>Criança:</strong> ${dadosEncontrados[1]}</p>
+                    <p><strong>Pacote de Horas:</strong> ${dadosEncontrados[2]} Horas</p>
+                    <p><strong>Saldo de Horas:</strong> <!-- Deixado sem resposta por enquanto --></p>
+                    <p><strong>Validade de Horas:</strong> <!-- Deixado sem resposta por enquanto --></p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Hora de Início</th>
+                                <th>Tempo de Término</th>
+                                <th>Total de Horas Usadas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                // Exibindo os registros de forma que hora de início e término apareçam nas linhas corretas
+                for (let i = 5; i < dadosEncontrados.length; i += 4) {
+                    const horaInicio1 = dadosEncontrados[i] || '';  // Verifica se existe valor, senão deixa vazio
+                    const horaTermino1 = dadosEncontrados[i + 1] || ''; // Verifica se existe valor, senão deixa vazio
+                    const horaInicio2 = dadosEncontrados[i + 2] || '';
+                    const horaTermino2 = dadosEncontrados[i + 3] || '';
+                    
+                    // Calcula a diferença entre hora de término e hora de início para o primeiro par
+                    const totalHorasUsadas1 = horaInicio1 && horaTermino1 ? calcularDiferencaHoras(horaInicio1, horaTermino1) : '';
+                    // Calcula a diferença entre hora de término e hora de início para o segundo par
+                    const totalHorasUsadas2 = horaInicio2 && horaTermino2 ? calcularDiferencaHoras(horaInicio2, horaTermino2) : '';
+
+                    // Primeira linha com o primeiro registro
+                    if (horaInicio1 && horaTermino1) {
+                        html += `
+                            <tr>
+                                <td>${horaInicio1}</td>
+                                <td>${horaTermino1}</td>
+                                <td>${totalHorasUsadas1}</td>
+                            </tr>
+                        `;
+                    }
+
+                    // Segunda linha com o segundo registro
+                    if (horaInicio2 && horaTermino2) {
+                        html += `
+                            <tr>
+                                <td>${horaInicio2}</td>
+                                <td>${horaTermino2}</td>
+                                <td>${totalHorasUsadas2}</td>
+                            </tr>
+                        `;
+                    }
+                }
+
+                html += `
+                        </tbody>
+                    </table>
+                `;
+
+                resultado.innerHTML = html;
+            } else {
+                resultado.innerHTML = "Código não encontrado.";
+            }
+        }
+
+        function calcularDiferencaHoras(horaInicio, horaTermino) {
+            const [inicioHoras, inicioMinutos] = horaInicio.split(':').map(Number);
+            const [terminoHoras, terminoMinutos] = horaTermino.split(':').map(Number);
+
+            const inicio = new Date(0, 0, 0, inicioHoras, inicioMinutos);
+            const termino = new Date(0, 0, 0, terminoHoras, terminoMinutos);
+
+            let diferenca = (termino - inicio) / (1000 * 60 * 60); // Diferença em horas
+            if (diferenca < 0) {
+                diferenca += 24; // Ajusta para o caso de virada de dia
+            }
+
+            return diferenca.toFixed(2) + " horas";
+        }
+    </script>
+</body>
+</html>
